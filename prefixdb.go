@@ -172,3 +172,17 @@ func (pdb *PrefixDB) Stats() map[string]string {
 func (pdb *PrefixDB) prefixed(key []byte) []byte {
 	return append(cp(pdb.prefix), key...)
 }
+
+func (db *PrefixDB) SetCriticalZone() {
+	// batching not implemented
+}
+
+func (db *PrefixDB) ReleaseCriticalZone() error {
+	// batching not implemented
+	return nil
+}
+
+func (db *PrefixDB) ForceSet(key []byte, value []byte) error {
+	// batching not implemented
+	return nil
+}

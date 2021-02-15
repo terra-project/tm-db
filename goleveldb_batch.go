@@ -39,7 +39,18 @@ func (b *goLevelDBBatch) Delete(key []byte) {
 
 // Write implements Batch.
 func (b *goLevelDBBatch) Write() error {
+	// cosmos-managed application batches should be intercepted to be guarded
+	if b.db.name == "application" {
+		batch := b.Copy()
+		b.db.waitingForCommitBatches = append(b.db.waitingForCommitBatches, &batch)
+		b.Close()
+		return nil
+	}
 	return b.write(false)
+}
+
+func (b *goLevelDBBatch) Copy() goLevelDBBatch {
+	return *b
 }
 
 // WriteSync implements Batch.
@@ -60,6 +71,10 @@ func (b *goLevelDBBatch) write(sync bool) error {
 
 // Close implements Batch.
 func (b *goLevelDBBatch) Close() {
+	if b.db.name == "application" {
+		// should not be closed by cosmos, only will be closed after it has been guarded
+		return
+	}
 	if b.batch != nil {
 		b.batch.Reset()
 		b.batch = nil

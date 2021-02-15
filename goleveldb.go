@@ -17,7 +17,11 @@ func init() {
 }
 
 type GoLevelDB struct {
-	db *leveldb.DB
+	db                      *leveldb.DB
+	name                    string
+	isCriticalZone          bool
+	currentBatch            Batch
+	waitingForCommitBatches []Batch
 }
 
 var _ DB = (*GoLevelDB)(nil)
@@ -33,14 +37,37 @@ func NewGoLevelDBWithOpts(name string, dir string, o *opt.Options) (*GoLevelDB, 
 		return nil, err
 	}
 	database := &GoLevelDB{
-		db: db,
+		db:   db,
+		name: name,
 	}
+	fmt.Printf("Created database %s\n", name)
 	return database, nil
+}
+
+func (db *GoLevelDB) SetCriticalZone() {
+	fmt.Printf("Set critical zone for db: %s\n", db.name)
+	db.currentBatch = newGoLevelDBBatch(db)
+	db.isCriticalZone = true
+}
+
+func (db *GoLevelDB) ReleaseCriticalZone() error {
+	fmt.Printf("Released critical zone (height-1) for db: %s (%d batches)\n", db.name, len(db.waitingForCommitBatches))
+	for _, cBatch := range db.waitingForCommitBatches {
+		if cBatch != nil {
+			cBatch.WriteSync()
+		}
+	}
+	db.waitingForCommitBatches = nil
+	db.isCriticalZone = false
+	db.waitingForCommitBatches = append(db.waitingForCommitBatches, db.currentBatch)
+	db.currentBatch = nil
+	return nil
 }
 
 // Get implements DB.
 func (db *GoLevelDB) Get(key []byte) ([]byte, error) {
 	key = nonNilBytes(key)
+	// we do not need to get from gt here?
 	res, err := db.db.Get(key, nil)
 	if err != nil {
 		if err == errors.ErrNotFound {
@@ -64,7 +91,24 @@ func (db *GoLevelDB) Has(key []byte) (bool, error) {
 func (db *GoLevelDB) Set(key []byte, value []byte) error {
 	key = nonNilBytes(key)
 	value = nonNilBytes(value)
-	if err := db.db.Put(key, value, nil); err != nil {
+	var err error = nil
+	if db.isCriticalZone {
+		db.currentBatch.Set(key, value)
+	} else {
+		// write directly to db
+		err = db.db.Put(key, value, nil)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *GoLevelDB) ForceSet(key []byte, value []byte) error {
+	key = nonNilBytes(key)
+	value = nonNilBytes(value)
+	err := db.db.Put(key, value, &opt.WriteOptions{Sync: true})
+	if err != nil {
 		return err
 	}
 	return nil
@@ -74,7 +118,14 @@ func (db *GoLevelDB) Set(key []byte, value []byte) error {
 func (db *GoLevelDB) SetSync(key []byte, value []byte) error {
 	key = nonNilBytes(key)
 	value = nonNilBytes(value)
-	if err := db.db.Put(key, value, &opt.WriteOptions{Sync: true}); err != nil {
+	var err error = nil
+	if db.isCriticalZone {
+		db.currentBatch.Set(key, value)
+	} else {
+		// write directly to db
+		err = db.db.Put(key, value, &opt.WriteOptions{Sync: true})
+	}
+	if err != nil {
 		return err
 	}
 	return nil
@@ -83,7 +134,14 @@ func (db *GoLevelDB) SetSync(key []byte, value []byte) error {
 // Delete implements DB.
 func (db *GoLevelDB) Delete(key []byte) error {
 	key = nonNilBytes(key)
-	if err := db.db.Delete(key, nil); err != nil {
+	var err error = nil
+	// TODO: if key is not found in batch, should we search in db?
+	if db.isCriticalZone {
+		db.currentBatch.Delete(key)
+	} else {
+		err = db.db.Delete(key, nil)
+	}
+	if err != nil {
 		return err
 	}
 	return nil
@@ -91,6 +149,7 @@ func (db *GoLevelDB) Delete(key []byte) error {
 
 // DeleteSync implements DB.
 func (db *GoLevelDB) DeleteSync(key []byte) error {
+	// TODO: should we find in batch first?
 	key = nonNilBytes(key)
 	err := db.db.Delete(key, &opt.WriteOptions{Sync: true})
 	if err != nil {

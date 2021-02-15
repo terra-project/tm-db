@@ -52,6 +52,15 @@ type DB interface {
 
 	// Stats returns a map of property values for all keys and the size of the cache.
 	Stats() map[string]string
+
+	// Sets critical to true, making subsequent wrties be diverted to a provisional batch
+	SetCriticalZone()
+
+	// Prepares the provisional batch to be released and clears current
+	ReleaseCriticalZone() error
+
+	// Writes directly to db, even when critical zone is set
+	ForceSet([]byte, []byte) error
 }
 
 // Batch Close must be called when the program no longer needs the object.

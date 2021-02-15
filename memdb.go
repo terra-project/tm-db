@@ -164,3 +164,17 @@ func (db *MemDB) Iterator(start, end []byte) (Iterator, error) {
 func (db *MemDB) ReverseIterator(start, end []byte) (Iterator, error) {
 	return newMemDBIterator(db, start, end, true), nil
 }
+
+func (db *MemDB) SetCriticalZone() {
+	// batching not implemented
+}
+
+func (db *MemDB) ReleaseCriticalZone() error {
+	// batching not implemented
+	return nil
+}
+
+func (db *MemDB) ForceSet(key []byte, value []byte) error {
+	// batching not implemented
+	return nil
+}
