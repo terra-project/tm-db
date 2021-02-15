@@ -54,7 +54,10 @@ func (db *GoLevelDB) ReleaseCriticalZone() error {
 	fmt.Printf("Released critical zone (height-1) for db: %s (%d batches)\n", db.name, len(db.waitingForCommitBatches))
 	for _, cBatch := range db.waitingForCommitBatches {
 		if cBatch != nil {
-			cBatch.WriteSync()
+			err := cBatch.WriteSync()
+			if err != nil {
+				return err
+			}
 		}
 	}
 	db.waitingForCommitBatches = nil
@@ -91,15 +94,14 @@ func (db *GoLevelDB) Has(key []byte) (bool, error) {
 func (db *GoLevelDB) Set(key []byte, value []byte) error {
 	key = nonNilBytes(key)
 	value = nonNilBytes(value)
-	var err error = nil
 	if db.isCriticalZone {
 		db.currentBatch.Set(key, value)
 	} else {
 		// write directly to db
-		err = db.db.Put(key, value, nil)
-	}
-	if err != nil {
-		return err
+		err := db.db.Put(key, value, nil)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -118,15 +120,14 @@ func (db *GoLevelDB) ForceSet(key []byte, value []byte) error {
 func (db *GoLevelDB) SetSync(key []byte, value []byte) error {
 	key = nonNilBytes(key)
 	value = nonNilBytes(value)
-	var err error = nil
 	if db.isCriticalZone {
 		db.currentBatch.Set(key, value)
 	} else {
 		// write directly to db
-		err = db.db.Put(key, value, &opt.WriteOptions{Sync: true})
-	}
-	if err != nil {
-		return err
+		err := db.db.Put(key, value, &opt.WriteOptions{Sync: true})
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -134,15 +135,14 @@ func (db *GoLevelDB) SetSync(key []byte, value []byte) error {
 // Delete implements DB.
 func (db *GoLevelDB) Delete(key []byte) error {
 	key = nonNilBytes(key)
-	var err error = nil
 	// TODO: if key is not found in batch, should we search in db?
 	if db.isCriticalZone {
 		db.currentBatch.Delete(key)
 	} else {
-		err = db.db.Delete(key, nil)
-	}
-	if err != nil {
-		return err
+		err := db.db.Delete(key, nil)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
