@@ -102,8 +102,7 @@ func (db *DBCache) SetSync(key []byte, value []byte) error {
 	return db.Set(key, value)
 }
 
-// ForceSet implements DB.
-// Used in very specific cases to write to memory directly
+// Write directly to persistent memory
 func (db *DBCache) ForceSet(key []byte, value []byte) error {
 	return db.db.SetSync(key, value)
 }
