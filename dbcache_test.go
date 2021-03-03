@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -149,5 +150,95 @@ func BenchmarkDBCacheRandomReadsWrites(b *testing.B) {
 		cleanupDBDir("", name)
 	}()
 
+	// only to cache
 	benchmarkRandomReadsWrites(b, db)
+}
+
+func BenchmarkDBCacheRandomReads(b *testing.B) {
+	name := fmt.Sprintf("test_%x", randStr(12))
+	db, err := NewDBCache(name, "")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer func() {
+		db.Close()
+		cleanupDBDir("", name)
+	}()
+
+	benchmarkDBCacheRandomReads(b, db, 100000)
+}
+
+func BenchmarkDBCacheRangeScans(b *testing.B) {
+	name := fmt.Sprintf("test_%x", randStr(12))
+	db, err := NewDBCache(name, "")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer func() {
+		db.Close()
+		cleanupDBDir("", name)
+	}()
+
+	benchmarkDBCacheRangeScans(b, db, 100000, 100)
+}
+
+func benchmarkDBCacheRangeScans(b *testing.B, db DB, numItems int64, rangeSize int64) {
+	dbSize := int(numItems/10) * 6
+	commitCacheSize := int(numItems/10) * 2
+
+	for i := 0; i < int(numItems); i++ {
+		item := int64(i)
+		err := db.Set(int642Bytes(item), int642Bytes(item))
+		if err != nil {
+			b.Fatal(b, err)
+		}
+		if i == dbSize {
+			db.Close()
+		}
+		if i == (dbSize + commitCacheSize) {
+			db.Close()
+		}
+	}
+
+	b.StartTimer()
+	for j := 0; j < b.N; j++ {
+
+		start := rand.Int63n(numItems - rangeSize)
+		end := start + rangeSize
+		iter, err := db.Iterator(int642Bytes(start), int642Bytes(end))
+		require.NoError(b, err)
+		count := 0
+		for ; iter.Valid(); iter.Next() {
+			count++
+		}
+		iter.Close()
+		require.EqualValues(b, rangeSize, count)
+	}
+}
+
+func benchmarkDBCacheRandomReads(b *testing.B, db DB, numItems int64) {
+	dbSize := int(numItems/10) * 6
+	commitCacheSize := int(numItems/10) * 2
+
+	for i := 0; i < int(numItems); i++ {
+		item := int64(i)
+		err := db.Set(int642Bytes(item), int642Bytes(item))
+		if err != nil {
+			b.Fatal(b, err)
+		}
+		if i == dbSize {
+			db.Close()
+		}
+		if i == (dbSize + commitCacheSize) {
+			db.Close()
+		}
+	}
+
+	b.StartTimer()
+	for j := 0; j < b.N; j++ {
+		idx := rand.Int63n(numItems)
+		val, err := db.Get(int642Bytes(idx))
+		require.NoError(b, err)
+		require.Equal(b, idx, bytes2Int64(val))
+	}
 }

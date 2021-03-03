@@ -90,7 +90,6 @@ func (db *DBCache) Has(key []byte) (bool, error) {
 // Set implements DB.
 func (db *DBCache) Set(key []byte, value []byte) error {
 	if db.isPersistentKey(key) {
-		fmt.Println("Setting validators...")
 		db.ForceSet(key, value)
 	}
 	db.cache.Set(key, value)
@@ -125,7 +124,6 @@ func (db *DBCache) DeleteSync(key []byte) error {
 // Close implements DB.
 func (db *DBCache) Close() error {
 
-	fmt.Printf("%s - cache-size: %d - commitCache-size: %d\n", db.name, db.cache.btree.Len(), db.commitCache.btree.Len())
 	for _, cBatch := range db.commitBatches {
 		if cBatch != nil {
 			cBatch.WriteSync()
