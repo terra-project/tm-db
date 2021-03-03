@@ -33,6 +33,11 @@ const (
 	//   - requires gcc
 	//   - use rocksdb build tag (go build -tags rocksdb)
 	RocksDBBackend BackendType = "rocksdb"
+
+	// DBCache wraps memDB and GoLevelDB to cache data with the goal of preventing
+	// memory corruption
+	//	- EXPERIMENTAL
+	DBCacheBackend BackendType = "dbcache"
 )
 
 type dbCreator func(name string, dir string) (DB, error)
