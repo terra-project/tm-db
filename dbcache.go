@@ -72,7 +72,7 @@ func (db *DBCache) Get(key []byte) ([]byte, error) {
 // Has implements DB.
 func (db *DBCache) Has(key []byte) (bool, error) {
 	db.mtx.RLock()
-	db.mtx.RUnlock()
+	defer db.mtx.RUnlock()
 	okCache, _ := db.cache.Has(key)
 	if okCache {
 		// cache hit
@@ -155,7 +155,7 @@ func (db *DBCache) Close() error {
 // Print implements DB.
 func (db *DBCache) Print() error {
 	db.mtx.RLock()
-	defer db.mtx.RLock()
+	defer db.mtx.RUnlock()
 
 	fmt.Println("Cache --")
 	db.cache.Print()
@@ -167,7 +167,7 @@ func (db *DBCache) Print() error {
 // Stats implements DB.
 func (db *DBCache) Stats() map[string]string {
 	db.mtx.RLock()
-	defer db.mtx.RLock()
+	defer db.mtx.RUnlock()
 
 	stats := make(map[string]string)
 	for k, v := range db.cache.Stats() {
