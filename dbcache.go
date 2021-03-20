@@ -122,6 +122,10 @@ func (db *DBCache) DeleteSync(key []byte) error {
 
 // Close implements DB.
 func (db *DBCache) Close() error {
+	db.commitCache.mtx.Lock()
+	db.cache.mtx.Lock()
+	defer db.commitCache.mtx.Unlock()
+	defer db.cache.mtx.Unlock()
 
 	for _, cBatch := range db.commitBatches {
 		if cBatch != nil {
