@@ -3,6 +3,7 @@ package db
 import (
 	"bytes"
 	"fmt"
+	"sync"
 )
 
 func init() {
@@ -20,6 +21,7 @@ type DBCache struct {
 	currentBatch  Batch
 	commitBatches []Batch
 	persistentKey []byte
+	mtx           sync.RWMutex
 }
 
 func NewDBCache(name string, dir string) (*DBCache, error) {
@@ -44,6 +46,8 @@ func NewDBCache(name string, dir string) (*DBCache, error) {
 
 // Get implements DB.
 func (db *DBCache) Get(key []byte) ([]byte, error) {
+	db.mtx.RLock()
+	defer db.mtx.RUnlock()
 	var v []byte
 	v, _ = db.cache.Get(key)
 	if v != nil {
@@ -67,6 +71,8 @@ func (db *DBCache) Get(key []byte) ([]byte, error) {
 
 // Has implements DB.
 func (db *DBCache) Has(key []byte) (bool, error) {
+	db.mtx.RLock()
+	db.mtx.RUnlock()
 	okCache, _ := db.cache.Has(key)
 	if okCache {
 		// cache hit
@@ -89,6 +95,9 @@ func (db *DBCache) Has(key []byte) (bool, error) {
 
 // Set implements DB.
 func (db *DBCache) Set(key []byte, value []byte) error {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
 	if db.isPersistentKey(key) {
 		db.ForceSet(key, value)
 	}
@@ -109,6 +118,8 @@ func (db *DBCache) ForceSet(key []byte, value []byte) error {
 
 // Delete implements DB.
 func (db *DBCache) Delete(key []byte) error {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
 	// delete in batch and cache
 	db.currentBatch.Delete(key)
 	db.commitCache.Delete(key)
@@ -122,10 +133,8 @@ func (db *DBCache) DeleteSync(key []byte) error {
 
 // Close implements DB.
 func (db *DBCache) Close() error {
-	db.commitCache.mtx.Lock()
-	db.cache.mtx.Lock()
-	defer db.commitCache.mtx.Unlock()
-	defer db.cache.mtx.Unlock()
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
 
 	for _, cBatch := range db.commitBatches {
 		if cBatch != nil {
@@ -145,6 +154,9 @@ func (db *DBCache) Close() error {
 
 // Print implements DB.
 func (db *DBCache) Print() error {
+	db.mtx.RLock()
+	defer db.mtx.RLock()
+
 	fmt.Println("Cache --")
 	db.cache.Print()
 	fmt.Println("DB --")
@@ -154,6 +166,8 @@ func (db *DBCache) Print() error {
 
 // Stats implements DB.
 func (db *DBCache) Stats() map[string]string {
+	db.mtx.RLock()
+	defer db.mtx.RLock()
 
 	stats := make(map[string]string)
 	for k, v := range db.cache.Stats() {
